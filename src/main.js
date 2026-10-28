@@ -281,10 +281,6 @@ async function replayRoom(){
     $('#modalAction').textContent='방장 기다리는 중';
     return;
   }
-  if(room.snapshot.status!=='finished'){
-    if(message)message.textContent='다른 참가자의 게임이 끝나면 다시 시작할 수 있어요.';
-    return;
-  }
   $('#modalAction').disabled=true;
   try{await api(`/api/rooms/${room.code}/replay`,{playerId:room.playerId});}
   catch(error){if(message)message.textContent=error.message;const button=$('#modalAction');if(button)button.disabled=false;}

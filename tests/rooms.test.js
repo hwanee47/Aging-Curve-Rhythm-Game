@@ -76,3 +76,18 @@ test('다시하기는 방번호와 참가자를 유지하고 다음 판 점수�
   assert.equal(restarted.round, 2);
   assert.equal(restarted.status, 'countdown');
 });
+
+test('종료 신호가 누락되어도 모든 참가자의 진행률이 100%면 다시할 수 있다', () => {
+  const { RoomStore } = require('../rooms.js');
+  let now = 1000;
+  const store = new RoomStore({ now: () => now });
+  const host = store.create('방장');
+  const guest = store.join(host.code, '참가자');
+  store.start(host.code, host.playerId);
+  now = 55000;
+  store.progress(host.code, host.playerId, { round: 1, score: 5000, progress: 100, finished: true });
+  const final = store.progress(host.code, guest.playerId, { round: 1, score: 4200, progress: 100, finished: false });
+  assert.equal(final.status, 'finished');
+  assert.equal(final.players.find(player => player.name === '참가자').finished, true);
+  assert.equal(store.replay(host.code, host.playerId).status, 'lobby');
+});

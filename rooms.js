@@ -113,7 +113,7 @@ class RoomStore {
     player.combo = Math.max(0, Math.floor(Number(data.combo) || 0));
     player.accuracy = Math.max(0, Math.min(100, Number(data.accuracy) || 0));
     player.progress = Math.max(player.progress, Math.min(100, Number(data.progress) || 0));
-    player.finished = player.finished || Boolean(data.finished);
+    player.finished = player.finished || Boolean(data.finished) || player.progress >= 100;
     return this.notify(room);
   }
 
