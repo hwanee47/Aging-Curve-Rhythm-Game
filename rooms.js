@@ -3,6 +3,21 @@ const { randomInt, randomUUID } = require('node:crypto');
 const DIFFICULTIES = new Set(['easy', 'normal', 'hard', 'superhard']);
 const SPEEDS = new Set([1, 1.25, 1.5, 1.75, 2]);
 
+function waitingRooms(rooms) {
+  return [...rooms]
+    .filter(room => room.status === 'lobby' && room.players.length > 0 && room.players.length < 8)
+    .map(room => ({
+      code: room.code,
+      hostName: room.players.find(player => player.id === room.hostId)?.name || room.players[0].name,
+      playerCount: room.players.length,
+      difficulty: room.difficulty,
+      speed: room.speed,
+      createdAt: room.createdAt || 0,
+    }))
+    .sort((a, b) => b.createdAt - a.createdAt || a.code.localeCompare(b.code))
+    .slice(0, 20);
+}
+
 class RoomStore {
   constructor({ now = Date.now } = {}) {
     this.now = now;
@@ -37,6 +52,16 @@ class RoomStore {
     };
   }
 
+  getSnapshot(code, token) {
+    const room = this.room(code);
+    this.player(room, token);
+    return this.snapshot(room);
+  }
+
+  listWaiting() {
+    return waitingRooms(this.rooms.values());
+  }
+
   notify(room) {
     const snapshot = this.snapshot(room);
     for (const listener of room.listeners) listener(snapshot);
@@ -49,7 +74,7 @@ class RoomStore {
     let code;
     do { code = String(randomInt(0, 1000000)).padStart(6, '0'); } while (this.rooms.has(code));
     const player = { id: randomUUID(), token: randomUUID(), name: cleanName, score: 0, combo: 0, accuracy: 100, progress: 0, finished: false };
-    const room = { code, round: 1, status: 'lobby', difficulty: 'normal', speed: 1, startsAt: null, hostId: player.id, players: [player], listeners: new Set() };
+    const room = { code, round: 1, status: 'lobby', difficulty: 'normal', speed: 1, startsAt: null, createdAt: this.now(), hostId: player.id, players: [player], listeners: new Set() };
     this.rooms.set(code, room);
     return { code, playerId: player.token, selfId: player.id, snapshot: this.snapshot(room) };
   }
@@ -93,6 +118,7 @@ class RoomStore {
     room.round++;
     room.status = 'lobby';
     room.startsAt = null;
+    room.createdAt = this.now();
     for (const player of room.players) {
       player.score = 0;
       player.combo = 0;
@@ -135,4 +161,4 @@ class RoomStore {
   }
 }
 
-module.exports = { RoomStore, SPEEDS };
+module.exports = { RoomStore, SPEEDS, waitingRooms };

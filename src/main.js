@@ -1,5 +1,5 @@
 import { SONG, buildChart, findHit, judgeOffset, holdResult } from './chart.mjs';
-import { keyLabelsForDifficulty, laneForCode, isPauseCode, normalizeName, insertRanking } from './rules.mjs';
+import { keyLabelsForDifficulty, laneForCode, isPauseCode, normalizeName } from './rules.mjs';
 import { advanceParticles } from './particles.mjs';
 
 export function mountGame(app) {
@@ -7,20 +7,20 @@ const $ = selector => app.querySelector(selector);
 const COLORS = ['#eaa07d', '#e5bc7f', '#d6d18b', '#8fc5bd', '#93b8d6', '#b4a6cf', '#d5a3af'];
 const FOUR_COLORS = ['#eaa07d', '#e5bc7f', '#8fc5bd', '#b4a6cf'];
 let keys = keyLabelsForDifficulty('normal'), laneColors = FOUR_COLORS;
-const rankingMemory = new Map();
+const rankingCache = new Map();
 const HINTS = { easy: '4레인 · 편하게 리듬을 익히는 채보', normal: '4레인 · 엇박이 섞인 기본 채보', hard: '7레인 · 촘촘한 엇박과 동시 입력', superhard: '7레인 · 빠르고 빽빽한 최고 난도' };
 const LEVEL_LABELS = { easy:'EASY', normal:'NORMAL', hard:'HARD', superhard:'SUPER HARD' };
 const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
 app.innerHTML = `
 <div class="shell">
   <header class="topbar">
-    <div class="brand"><div class="logo">♫</div><div><b>에이징커브 테스트</b><small>RHYTHM ARCADE</small></div></div>
+    <div class="brand"><div class="logo">♫</div><div><b>천하제일 손가락 대회</b><small>RHYTHM ARCADE</small></div></div>
     <div class="top-middle"><i class="live-dot"></i> ORIGINAL SYNTH TRACK <span>·</span> <span id="laneCountLabel">4 LANES</span></div>
     <div class="top-actions"><button class="icon-button" id="soundBtn" aria-label="소리 끄기">♫</button><button class="icon-button" id="pauseBtn" aria-label="일시정지">Ⅱ</button></div>
   </header>
   <main class="layout">
     <aside class="side left">
-      <section class="card hero"><div class="eyebrow">AGING CURVE TEST</div><h1>손끝으로<br><em>승부해요.</em></h1><p>노트가 판정선에 닿는 순간 키를 누르세요. 한 곡의 점수가 당신의 순위를 결정합니다.</p><div class="album"><div class="album-disc"></div><span class="album-caption">01 — MIDNIGHT SIGNAL</span></div></section>
+      <section class="card hero"><div class="eyebrow">천하제일 손가락 대회</div><h1>손끝으로<br><em>승부해요.</em></h1><p>노트가 판정선에 닿는 순간 키를 누르세요. 한 곡의 점수가 당신의 순위를 결정합니다.</p><div class="album"><div class="album-disc"></div><span class="album-caption">01 — MIDNIGHT SIGNAL</span></div></section>
       <section class="card track-card"><div class="eyebrow">NOW PLAYING</div><div class="track-head" style="margin-top:12px"><div class="track-thumb">✦</div><div><strong>${SONG.title}</strong><small>${SONG.artist}</small></div></div><div class="track-meta"><span>${SONG.bpm} BPM</span><span id="trackDuration">0:48</span><span>ORIGINAL</span></div></section>
       <section class="card difficulty"><div class="eyebrow">SELECTED LEVEL</div><h3 id="difficultyName">NORMAL</h3><div class="difficulty-hint" id="difficultyHint">${HINTS.normal}</div><div class="speed-summary">게임 속도 <b id="speedValue">1.00×</b></div></section>
     </aside>
@@ -31,15 +31,16 @@ app.innerHTML = `
       <div class="stage-foot" id="stageFoot"></div>
     </section>
     <aside class="side right">
+      <section class="card waiting-rooms-card" id="waitingRoomsPanel"><div class="waiting-rooms-head"><div class="eyebrow">현재 대기 중인 방</div><span id="waitingRoomsCount">0개</span></div><div class="waiting-rooms-list" id="waitingRoomsList"><div class="ranking-empty">방 목록을 불러오는 중...</div></div><small>방번호를 입력해서 참여할 수도 있어요.</small></section>
       <section class="card score-card"><div class="eyebrow">YOUR PERFORMANCE</div><div class="player-name" id="playerBadge">PLAYER · GUEST</div><div class="score-number" id="score">000000<span>PTS</span></div><div class="score-divider"></div><div class="stat-pair"><div class="stat-box"><small>COMBO</small><b class="pink" id="combo">0</b></div><div class="stat-box"><small>ACCURACY</small><b class="cyan" id="accuracy">100.0%</b></div></div></section>
       <section class="card progress-card"><div class="progress-head"><span>TRACK PROGRESS</span><span id="progressPercent">0%</span></div><div class="progress-bar"><i id="progressFill"></i></div><div class="judgement-rows"><div class="judgement-row judge-perfect"><span>✦ PERFECT</span><b id="perfectCount">0</b></div><div class="judgement-row judge-great"><span>◆ GREAT</span><b id="greatCount">0</b></div><div class="judgement-row judge-good"><span>● GOOD</span><b id="goodCount">0</b></div><div class="judgement-row judge-miss"><span>× MISS</span><b id="missCount">0</b></div></div></section>
       <section class="card room-panel" id="roomPanel" hidden><div class="eyebrow">함께하기 랭킹 <span id="roomPanelCode"></span></div><div class="room-players" id="roomPlayers"></div></section>
-      <section class="card solo-panel" id="soloPanel"><div class="eyebrow">혼자하기 랭킹</div><div class="solo-ranking-list" id="soloRankingList"></div><small>이 브라우저의 난이도별 기록</small></section>
+      <section class="card solo-panel" id="soloPanel"><div class="eyebrow">전체 랭킹 <span id="globalRankLevel">NORMAL</span></div><div class="solo-ranking-list" id="soloRankingList"></div><small>모든 플레이어 · 난이도별 기록</small></section>
       <section class="card help"><div class="eyebrow">HOW TO PLAY</div><h3>빛이 닿는 순간 눌러요</h3><div class="help-grid" id="helpGrid"></div><p id="helpText"></p></section>
       <section class="card control-card"><button id="restartBtn">↻ &nbsp; 다시 시작</button><button id="playPauseBtn">Ⅱ &nbsp; 일시정지</button></section>
     </aside>
   </main>
-  <footer class="footer"><span>에이징커브 테스트 © 2026 · ORIGINAL BROWSER RHYTHM GAME</span><span>HEADPHONES RECOMMENDED ◌</span></footer>
+  <footer class="footer"><span>천하제일 손가락 대회 © 2026 · ORIGINAL BROWSER RHYTHM GAME</span><span>HEADPHONES RECOMMENDED ◌</span></footer>
 </div>`;
 
 const canvas = $('#game');
@@ -47,6 +48,7 @@ const ctx = canvas.getContext('2d');
 let state, audioCtx, master, noiseBuffer, startAt;
 let pressed = Array(keys.length).fill(0), particles = [], judgementUntil = 0;
 let room = null, roomClockOffset = 0, lastProgressSent = 0;
+let waitingRooms = null, waitingRoomsError = '', waitingRoomsLoading = false;
 const keyboardHeld = new Set(), pointerHeld = new Set();
 const isLaneHeld = lane => keyboardHeld.has(lane) || pointerHeld.has(lane);
 
@@ -67,7 +69,7 @@ function setDifficulty(level) {
   $('#stageTag').textContent = `${LEVEL_LABELS[level]} MODE`;
   $('#laneCountLabel').textContent=`${keys.length} LANES`;
   $('#game').setAttribute('aria-label',`${keys.length}레인의 리듬게임 필드`);
-  renderSoloRanking();
+  loadGlobalRanking(level);
   const modalHelp=$('#modalHost .modal-help');if(modalHelp)modalHelp.textContent=keys.join(' · ');
 }
 function setSpeed(speed) {
@@ -96,27 +98,64 @@ function renderKeys() {
   });
 }
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character])); }
-function rankingKey(level) { return `finger-champ-solo-v1-${level}`; }
-function loadRanking(level) {
-  try {
-    const rows=JSON.parse(localStorage.getItem(rankingKey(level)) || '[]');
-    if(Array.isArray(rows))return insertRanking(rows,undefined);
-  } catch { /* Browser storage can be unavailable. */ }
-  return rankingMemory.get(level) || [];
+function renderGlobalRanking(){
+  $('#globalRankLevel').textContent=LEVEL_LABELS[state.difficulty];
+  const result=rankingCache.get(state.difficulty);
+  const rows=result?.rows?.slice(0,5)||[];
+  $('#soloRankingList').innerHTML=result?.error?`<div class="ranking-empty">${escapeHtml(result.error)}</div>`:rows.length?rows.map((row,index)=>`<div class="solo-ranking-row"><span>${index+1}</span><b>${escapeHtml(row.name)}<em>${row.mode==='together'?'함께':'혼자'}</em></b><strong>${Number(row.score).toLocaleString()}</strong></div>`).join(''):`<div class="ranking-empty">${result?'아직 기록이 없어요. 첫 기록을 남겨보세요!':'전체 랭킹을 불러오는 중...'}</div>`;
 }
-function saveRanking(level,entry) {
-  const rows=insertRanking(loadRanking(level),entry);
-  rankingMemory.set(level,rows);
-  try { localStorage.setItem(rankingKey(level),JSON.stringify(rows)); } catch { /* Keep rankings for this session. */ }
-  return rows;
+async function loadGlobalRanking(level){
+  try{
+    const response=await fetch(`/api/rankings?difficulty=${encodeURIComponent(level)}`,{cache:'no-store'});
+    const result=await response.json();
+    if(!response.ok)throw new Error(result.error||'전체 랭킹을 불러오지 못했습니다.');
+    rankingCache.set(level,{rows:result.rows});
+  }catch(error){rankingCache.set(level,{error:error.message});}
+  if(state.difficulty===level)renderGlobalRanking();
 }
-function renderSoloRanking(){
-  const rows=loadRanking(state.difficulty).slice(0,5);
-  $('#soloRankingList').innerHTML=rows.length?rows.map((row,index)=>`<div class="solo-ranking-row"><span>${index+1}</span><b>${escapeHtml(row.name)}</b><strong>${Number(row.score).toLocaleString()}</strong></div>`).join(''):'<div class="ranking-empty">아직 기록이 없어요. 첫 기록을 남겨보세요!</div>';
+function rankingHtml(rows,currentId,rank) {
+  return `<div class="ranking"><div class="ranking-heading"><b>전체 랭킹 · ${LEVEL_LABELS[state.difficulty]}</b><span>${rank?`내 순위 ${rank}위`:'500위 밖'}</span></div><div class="ranking-list">${rows.slice(0,5).map((row,index)=>`<div class="ranking-row ${row.id===currentId?'mine':''}"><span>${String(index+1).padStart(2,'0')}</span><b>${escapeHtml(row.name)} · ${row.mode==='together'?'함께':'혼자'}</b><strong>${Number(row.score).toLocaleString()}</strong></div>`).join('')}</div><small>모든 플레이어의 난이도별 기록</small></div>`;
 }
-function rankingHtml(rows,currentId) {
-  const place=rows.findIndex(row=>row.id===currentId);
-  return `<div class="ranking"><div class="ranking-heading"><b>혼자하기 · ${LEVEL_LABELS[state.difficulty]}</b><span>${place>=0?`내 순위 ${place+1}위`:'TOP 10 도전!'}</span></div><div class="ranking-list">${rows.slice(0,5).map((row,index)=>`<div class="ranking-row ${row.id===currentId?'mine':''}"><span>${String(index+1).padStart(2,'0')}</span><b>${escapeHtml(row.name)}</b><strong>${Number(row.score).toLocaleString()}</strong></div>`).join('')}</div><small>이 브라우저의 난이도별 혼자하기 기록</small></div>`;
+function renderWaitingRooms(){
+  $('#waitingRoomsPanel').hidden=state.mode!=='idle';
+  if(state.mode!=='idle')return;
+  $('#waitingRoomsCount').textContent=`${waitingRooms?.length||0}개`;
+  $('#waitingRoomsList').innerHTML=waitingRoomsError?`<div class="ranking-empty">${escapeHtml(waitingRoomsError)}</div>`:waitingRooms?.length?waitingRooms.map(item=>`<button type="button" class="waiting-room" data-waiting-room="${item.code}" aria-label="${escapeHtml(item.hostName)}님의 방 ${item.code} 참여하기"><span class="waiting-room-top"><b>${escapeHtml(item.hostName)}님의 방</b><strong>참여하기 →</strong></span><span class="waiting-room-meta">#${item.code} · ${LEVEL_LABELS[item.difficulty]||'NORMAL'} · ${Number(item.speed).toFixed(2)}× · ${item.playerCount}/8명</span></button>`).join(''):`<div class="ranking-empty">${waitingRooms?'지금은 대기 중인 방이 없어요.':'방 목록을 불러오는 중...'}</div>`;
+  $('#waitingRoomsList').querySelectorAll('[data-waiting-room]').forEach(button=>button.onclick=()=>joinWaitingRoom(button.dataset.waitingRoom));
+}
+async function loadWaitingRooms(){
+  if(waitingRoomsLoading||state.mode!=='idle')return;
+  waitingRoomsLoading=true;
+  try{
+    const response=await fetch('/api/rooms/waiting',{cache:'no-store'});
+    const result=await response.json();
+    if(!response.ok)throw new Error(result.error||'방 목록을 불러오지 못했습니다.');
+    waitingRooms=result.rooms;waitingRoomsError='';
+  }catch(error){waitingRoomsError=error.message;}
+  finally{waitingRoomsLoading=false;renderWaitingRooms();}
+}
+function joinWaitingRoom(code){
+  if(state.mode!=='idle')return;
+  state.playMode='together';state.roomAction='join';
+  $('#roomCodeInput').value=code;
+  setupModeUI();
+  if(!normalizeName($('#playerName').value)){
+    $('#nameError').textContent='이름을 입력한 뒤 참여해 주세요.';
+    $('#playerName').focus();
+    return;
+  }
+  startGame();
+}
+async function saveGlobalRanking(entry){
+  try{
+    const response=await fetch('/api/rankings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(entry),keepalive:true});
+    const result=await response.json();
+    if(!response.ok)throw new Error(result.error||'전체 랭킹 저장에 실패했습니다.');
+    rankingCache.set(entry.difficulty,{rows:result.rows});
+    if(state.difficulty===entry.difficulty)renderGlobalRanking();
+    const target=$('#globalResultRanking');
+    if(target?.dataset.recordId===entry.id)target.innerHTML=rankingHtml(result.rows,entry.id,result.rank);
+  }catch(error){const target=$('#globalResultRanking');if(target?.dataset.recordId===entry.id)target.textContent=`전체 랭킹 저장 실패: ${error.message}`;}
 }
 function roomRankingHtml(snapshot){
   const players=[...snapshot.players].sort((a,b)=>b.score-a.score||b.accuracy-a.accuracy||a.name.localeCompare(b.name,'ko'));
@@ -139,7 +178,6 @@ function speedChoices(selected, attribute='data-speed') {
   return `<div class="speed-options" role="group" aria-label="게임 속도">${SPEEDS.map(speed=>`<button type="button" ${attribute}="${speed}" class="${selected===speed?'active':''}" aria-pressed="${selected===speed}">${speed.toFixed(2)}×</button>`).join('')}</div>`;
 }
 function setupModeUI() {
-  $('#soloPanel').hidden=state.playMode==='together';
   document.querySelectorAll('[data-play-mode]').forEach(button=>button.classList.toggle('active',button.dataset.playMode===state.playMode));
   document.querySelectorAll('[data-room-action]').forEach(button=>button.classList.toggle('active',button.dataset.roomAction===state.roomAction));
   $('#roomActionRow').hidden=state.playMode!=='together';
@@ -154,10 +192,11 @@ function reset() {
   state = { mode:'idle', playMode:state?.playMode || 'solo', roomAction:'create', difficulty:state?.difficulty || 'normal', speed:state?.speed || 1, playerName:state?.playerName || '', notes:[], score:0, combo:0, maxCombo:0, perfect:0, great:0, good:0, miss:0, weighted:0, sound:state?.sound ?? true, time:0, missCursor:0, startAtEpoch:0 };
   particles=[]; pressed=Array(keys.length).fill(0);keyboardHeld.clear();pointerHeld.clear();
   $('#roomPanel').hidden=true;roomClockOffset=0;
-  $('#soloPanel').hidden=state.playMode==='together';
+  renderWaitingRooms();
+  loadWaitingRooms();
   setDifficulty(state.difficulty);
   setSpeed(state.speed);
-  renderSoloRanking();
+  renderGlobalRanking();
   updateHUD();
   const setup=`<label class="name-label" for="playerName">플레이어 이름</label><input id="playerName" class="name-input" maxlength="12" placeholder="이름을 입력하세요" value="${escapeHtml(state.playerName)}" autocomplete="nickname" /><div id="nameError" class="name-error"></div><div class="name-label">플레이 모드</div><div class="mode-options"><button type="button" data-play-mode="solo">혼자하기</button><button type="button" data-play-mode="together">함께하기</button></div><div class="mode-options" id="roomActionRow"><button type="button" data-room-action="create">방 만들기</button><button type="button" data-room-action="join">참여하기</button></div><div id="roomCodeRow"><label class="name-label" for="roomCodeInput">방번호 6자리</label><input id="roomCodeInput" class="name-input" inputmode="numeric" maxlength="6" placeholder="방번호 입력" /></div><div id="setupSettings"><div class="name-label">난이도 선택</div>${difficultyChoices(state.difficulty)}<div class="difficulty-hint" id="setupDifficultyHint">${HINTS[state.difficulty]}</div><div class="name-label">게임 속도</div>${speedChoices(state.speed)}</div><div class="setup-error" id="setupError"></div>`;
   showModal('','','','','혼자 시작하기',startGame,setup);
@@ -225,7 +264,7 @@ async function api(path,data) {
 function leaveRoom() {
   if(!room)return;
   const leaving=room;
-  leaving.events?.close();room=null;
+  clearInterval(leaving.poller);room=null;
   api(`/api/rooms/${leaving.code}/leave`,{playerId:leaving.playerId}).catch(()=>{});
 }
 function postProgress(finished) {
@@ -282,7 +321,7 @@ async function replayRoom(){
     return;
   }
   $('#modalAction').disabled=true;
-  try{await api(`/api/rooms/${room.code}/replay`,{playerId:room.playerId});}
+  try{onRoomSnapshot(await api(`/api/rooms/${room.code}/replay`,{playerId:room.playerId}));}
   catch(error){if(message)message.textContent=error.message;const button=$('#modalAction');if(button)button.disabled=false;}
 }
 function onRoomSnapshot(snapshot) {
@@ -296,32 +335,47 @@ function onRoomSnapshot(snapshot) {
   const replayMessage=$('#replayMessage');
   if(replayMessage&&snapshot.status==='finished'&&room.selfId===snapshot.hostId)replayMessage.textContent='모든 참가자가 끝났어요. 다시하기를 누르면 같은 방에서 다음 판을 준비합니다.';
   if(snapshot.status==='lobby'){
+    const lobbyChanged=state.mode!=='lobby';
     state.mode='lobby';
     if(state.difficulty!==snapshot.difficulty)setDifficulty(snapshot.difficulty);
     if(state.speed!==snapshot.speed)setSpeed(snapshot.speed);
-    renderLobby(snapshot);
+    const signature=JSON.stringify([snapshot.round,snapshot.hostId,snapshot.difficulty,snapshot.speed,snapshot.players.map(player=>[player.id,player.name])]);
+    if(lobbyChanged||signature!==room.lobbySignature){room.lobbySignature=signature;renderLobby(snapshot);}
   } else if(state.mode==='lobby') {
     if(state.difficulty!==snapshot.difficulty)setDifficulty(snapshot.difficulty);
     if(state.speed!==snapshot.speed)setSpeed(snapshot.speed);
     beginCountdown(snapshot.startsAt);
   }
 }
+async function pollRoom(currentRoom) {
+  if(room!==currentRoom||currentRoom.polling)return;
+  currentRoom.polling=true;
+  try {
+    const response=await fetch(`/api/rooms/${currentRoom.code}/snapshot?playerId=${encodeURIComponent(currentRoom.playerId)}`,{cache:'no-store'});
+    const snapshot=await response.json();
+    if(!response.ok)throw new Error(snapshot.error||'방 연결에 실패했습니다.');
+    if(room===currentRoom){onRoomSnapshot(snapshot);$('#roomPanel .eyebrow').classList.remove('reconnecting');}
+  } catch(error) {
+    if(room===currentRoom){
+      $('#roomPanel .eyebrow').classList.add('reconnecting');
+      const message=$('#lobbyError')||$('#replayMessage');
+      if(message)message.textContent=error.message;
+    }
+  } finally { currentRoom.polling=false; }
+}
 function connectRoom(data) {
-  room={code:data.code,playerId:data.playerId,selfId:data.selfId,currentRound:data.snapshot.round,snapshot:data.snapshot,events:null};
+  room={code:data.code,playerId:data.playerId,selfId:data.selfId,currentRound:data.snapshot.round,snapshot:data.snapshot,poller:null,polling:false};
   state.mode='lobby';
+  renderWaitingRooms();
   onRoomSnapshot(data.snapshot);
-  const events=new EventSource(`/api/rooms/${room.code}/events?playerId=${encodeURIComponent(room.playerId)}`);
-  room.events=events;
-  events.onmessage=event=>{try{onRoomSnapshot(JSON.parse(event.data));}catch{/* Ignore malformed updates. */}};
-  events.onerror=()=>{$('#roomPanel .eyebrow').classList.add('reconnecting');};
-  events.onopen=()=>{$('#roomPanel .eyebrow').classList.remove('reconnecting');};
+  const currentRoom=room;
+  currentRoom.poller=setInterval(()=>pollRoom(currentRoom),700);
 }
 async function startGame() {
   if(state.mode!=='idle')return;
   const playerName=normalizeName($('#playerName')?.value);
   if(!playerName){$('#nameError').textContent='이름을 입력해야 게임을 시작할 수 있어요.';$('#playerName')?.focus();return;}
   state.playerName=playerName;$('#playerBadge').textContent=`PLAYER · ${playerName}`;
-  $('#soloPanel').hidden=state.playMode==='together';
   ensureAudio();
   if(state.playMode==='solo'){beginCountdown(Date.now()+3000);return;}
   const code=$('#roomCodeInput')?.value.trim();
@@ -335,6 +389,7 @@ async function startGame() {
 }
 function beginCountdown(startsAtEpoch) {
   state.startAtEpoch=startsAtEpoch;state.time=0;state.mode='countdown';
+  renderWaitingRooms();
   if(audioCtx&&master){
     startAt=audioCtx.currentTime+Math.max(.02,(startsAtEpoch-Date.now()-roomClockOffset)/1000);
     scheduleMusic();
@@ -369,16 +424,11 @@ function finish() {
   postProgress(true);
   const accuracy=state.notes.length?state.weighted/state.notes.length:0;
   const rank=accuracy>=.95?'S':accuracy>=.85?'A':accuracy>=.70?'B':accuracy>=.55?'C':'D';
-  let ranking;
-  if(room)ranking=`<div id="resultRanking">${roomRankingHtml(room.snapshot)}</div>`;
-  else{
-    const id=`${Date.now()}-${Math.random()}`;
-    const rows=saveRanking(state.difficulty,{id,name:state.playerName,score:state.score,accuracy,maxCombo:state.maxCombo,at:Date.now()});
-    renderSoloRanking();
-    ranking=rankingHtml(rows,id);
-  }
-  const extra=`<div class="result-rank">${rank}</div><div class="result-stats"><span>SCORE<b>${state.score.toLocaleString()}</b></span><span>ACCURACY<b>${(accuracy*100).toFixed(1)}%</b></span><span>MAX COMBO<b>${state.maxCombo}</b></span></div>${ranking}${room?'<div class="replay-message" id="replayMessage">같은 방에서 다시 시작할 수 있어요.</div>':''}`;
+  const entry={id:room?`${room.code}-${room.currentRound}-${room.selfId}`:crypto.randomUUID(),name:state.playerName,mode:room?'together':'solo',difficulty:state.difficulty,score:state.score,accuracy:accuracy*100};
+  const roomRanking=room?`<div id="resultRanking">${roomRankingHtml(room.snapshot)}</div>`:'';
+  const extra=`<div class="result-rank">${rank}</div><div class="result-stats"><span>SCORE<b>${state.score.toLocaleString()}</b></span><span>ACCURACY<b>${(accuracy*100).toFixed(1)}%</b></span><span>MAX COMBO<b>${state.maxCombo}</b></span></div>${roomRanking}<div id="globalResultRanking" data-record-id="${entry.id}" class="ranking-empty">전체 랭킹에 기록하는 중...</div>${room?'<div class="replay-message" id="replayMessage">같은 방에서 다시 시작할 수 있어요.</div>':''}`;
   showModal('✦','PERFORMANCE COMPLETE','무대가 끝났어요',`${escapeHtml(state.playerName)}님, 총 ${state.notes.length}개의 노트 중 ${state.perfect}개를 PERFECT로 맞혔어요.`, '다시하기',room?replayRoom:reset,extra,{secondaryLabel:room?'방 나가기':null,secondaryAction:reset});
+  saveGlobalRanking(entry);
   updateHUD();
 }
 function showJudgement(label,color){
@@ -553,7 +603,7 @@ function loop(){
     }
     if(state.time>=SONG.duration)finish();
     updateHUD();
-    if(room&&performance.now()-lastProgressSent>250){lastProgressSent=performance.now();postProgress(false);}
+    if(room&&performance.now()-lastProgressSent>600){lastProgressSent=performance.now();postProgress(false);}
   }
   particles=advanceParticles(particles);
   if(performance.now()>judgementUntil)$('#judgeDisplay').classList.remove('show');
@@ -581,10 +631,14 @@ window.addEventListener('pagehide',()=>{
 $('#soundBtn').onclick=()=>{state.sound=!state.sound;$('#soundBtn').textContent=state.sound?'♫':'♪';$('#soundBtn').setAttribute('aria-label',state.sound?'소리 끄기':'소리 켜기');if(master)master.gain.setTargetAtTime(state.sound ? .68 : 0,audioCtx.currentTime,.02);};
 $('#pauseBtn').onclick=togglePause;$('#playPauseBtn').onclick=togglePause;$('#restartBtn').onclick=reset;
 let frameId;
+const rankingPoller=setInterval(()=>loadGlobalRanking(state.difficulty),15000);
+const waitingPoller=setInterval(loadWaitingRooms,5000);
 reset();frameId=requestAnimationFrame(loop);
 return () => {
   listeners.abort();
   cancelAnimationFrame(frameId);
+  clearInterval(rankingPoller);
+  clearInterval(waitingPoller);
   if(room)leaveRoom();
   if(audioCtx)audioCtx.close().catch(()=>{});
   app.replaceChildren();

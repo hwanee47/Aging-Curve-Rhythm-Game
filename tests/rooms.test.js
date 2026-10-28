@@ -8,6 +8,7 @@ test('방장은 설정과 시작을 관리하고 참가자는 같은 방의 진�
   const host = store.create('방장');
   assert.match(host.code, /^\d{6}$/);
   const guest = store.join(host.code, '친구');
+  assert.deepEqual(store.listWaiting().map(room => ({ code: room.code, hostName: room.hostName, playerCount: room.playerCount })), [{ code: host.code, hostName: '방장', playerCount: 2 }]);
   assert.equal(guest.snapshot.players.length, 2);
   assert.throws(() => store.settings(host.code, guest.playerId, { difficulty: 'hard', speed: 1.5 }), /방장/);
   const configured = store.settings(host.code, host.playerId, { difficulty: 'hard', speed: 1.5 });
@@ -16,6 +17,7 @@ test('방장은 설정과 시작을 관리하고 참가자는 같은 방의 진�
   assert.throws(() => store.start(host.code, guest.playerId), /방장/);
   const started = store.start(host.code, host.playerId);
   assert.equal(started.status, 'countdown');
+  assert.deepEqual(store.listWaiting(), []);
   assert.equal(started.startsAt, 4000);
   assert.throws(() => store.join(host.code, '늦은 친구'), /시작/);
   now = 4500;
@@ -70,6 +72,7 @@ test('다시하기는 방번호와 참가자를 유지하고 다음 판 점수�
   assert.equal(next.status, 'lobby');
   assert.equal(next.players.length, 2);
   assert.deepEqual(next.players.map(player => player.name), ['방장', '참가자']);
+  assert.equal(store.listWaiting()[0].code, host.code);
   assert.ok(next.players.every(player => player.score === 0 && player.progress === 0 && !player.finished));
   assert.throws(() => store.progress(host.code, guest.playerId, { round: 1, score: 9999 }), /이전 판/);
   const restarted = store.start(host.code, host.playerId);

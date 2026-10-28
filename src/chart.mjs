@@ -1,6 +1,6 @@
 export const SONG = {
   title: 'MIDNIGHT SIGNAL',
-  artist: 'AGING CURVE ORIGINAL',
+  artist: '천하제일 손가락 대회 ORIGINAL',
   bpm: 128,
   bars: 24,
   get beat() { return 60 / this.bpm; },

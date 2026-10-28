@@ -3,7 +3,7 @@ import '../src/upgrade.css';
 import '../src/theme.css';
 
 export const metadata = {
-  title: '에이징커브 테스트 — 리듬게임',
+  title: '천하제일 손가락 대회 — 리듬게임',
   description: '혼자 또는 친구와 함께 즐기는 브라우저 리듬게임',
 };
 
